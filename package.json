@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "postinstall": "git config core.hooksPath .githooks && git config user.name miloudlafttah849 && git config user.email miloudlafttah849@gmail.com"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",
