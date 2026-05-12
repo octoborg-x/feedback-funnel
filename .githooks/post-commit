@@ -1,0 +1,12 @@
+#!/bin/bash
+# Rewrite last commit author to repo owner
+CORRECT_NAME="miloudlafttah849"
+CORRECT_EMAIL="miloudlafttah849@gmail.com"
+
+CURRENT_AUTHOR=$(git log -1 --format="%an")
+
+if [ "$CURRENT_AUTHOR" != "$CORRECT_NAME" ]; then
+  git commit --amend --no-edit \
+    --author="$CORRECT_NAME <$CORRECT_EMAIL>" \
+    --reset-author 2>/dev/null || true
+fi
