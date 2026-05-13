@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "prisma generate && next build",
     "start": "next start",
     "lint": "eslint",
     "postinstall": "git config core.hooksPath .githooks && git config user.name miloudlafttah849 && git config user.email miloudlafttah849@gmail.com"
