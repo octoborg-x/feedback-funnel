@@ -1,15 +1,6 @@
 /**
  * route.ts — POST /api/analyze
  * Wires the full pipeline in correct order.
- *
- * Pipeline:
- * 1. Parse input
- * 2. Privacy — strip PII
- * 3. Quality score
- * 4. Normalize (VADER sentiment per review)
- * 5. Generate report (themes → scoring → decision)
- * 6. Minimize (remove tokens before DB save)
- * 7. Save + return
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -19,15 +10,34 @@ import { scoreInputQuality } from '@/lib/quality';
 import { generateReport } from '@/lib/report';
 import { prisma } from '@/lib/db';
 
+console.log('[analyze] Module loaded');
+
 export async function POST(req: NextRequest) {
+  console.log('[analyze] POST called');
   try {
     const body = await req.json();
-    const { text, csv, productName } = body;
+    console.log('[analyze] Body keys:', Object.keys(body));
+    const { text, csv, productName, reviews } = body;
 
-    // Step 1 — Parse
-    const rawInputs = csv
-      ? parseCSVInput(csv)
-      : parseTextInput(text ?? '');
+    let rawInputs;
+    
+    // Accept reviews array directly or parse from text/csv
+    if (reviews && Array.isArray(reviews)) {
+      rawInputs = reviews.map((r: { text: string; rating?: number; date?: string; verified?: boolean }) => ({
+        text: r.text,
+        rating: r.rating,
+        date: r.date,
+        verified: r.verified,
+      }));
+    } else {
+      rawInputs = csv
+        ? parseCSVInput(csv)
+        : parseTextInput(text ?? '');
+    }
+
+    console.log('[analyze] rawInputs.length =', rawInputs?.length ?? 'undefined');
+    console.log('[analyze] reviews is array:', Array.isArray(reviews));
+    console.log('[analyze] reviews?.length:', reviews?.length);
 
     if (rawInputs.length < 10) {
       return NextResponse.json(
@@ -36,29 +46,29 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Step 2 — Privacy: strip PII before any processing
+    // Privacy: strip PII
     const batch = anonymizeBatch(rawInputs.map(r => r.text));
     const cleanInputs = rawInputs.map((input, i) => ({
       ...input,
-      text: batch.reviews[i].cleanText, // use anonymized text throughout
+      text: batch.reviews[i].cleanText,
     }));
 
-    // Step 3 — Input quality
+    // Input quality
     const quality = scoreInputQuality(cleanInputs);
     quality.warnings.push(...(batch.piiCount > 0
       ? [`${batch.piiCount} review(s) contained PII — anonymized before processing.`]
       : []));
 
-    // Step 4 — Normalize (VADER scoring per review)
-    const reviews = cleanInputs.map(normalizeReview);
+    // Normalize (VADER scoring per review)
+    const scoredReviews = cleanInputs.map(normalizeReview);
 
-    // Step 5 — Generate full report
-    const report = await generateReport(reviews, quality);
+    // Generate full report
+    const report = await generateReport(scoredReviews, quality);
 
-    // Step 6 — Minimize memory footprint before DB
-    const safeReviews = minimizeBatch(reviews);
+    // Minimize memory footprint before DB
+    const safeReviews = minimizeBatch(scoredReviews);
 
-    // Step 7 — Save to DB
+    // Save to DB
     const saved = await prisma.report.create({
       data: {
         productName: productName ?? null,
